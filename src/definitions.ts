@@ -1,8 +1,7 @@
-/// <reference types="@capacitor/cli" />
-
-declare module '@capacitor/cli' {
-  export interface PluginsConfig {
-    GoogleAuth: GoogleAuthPluginOptions;
+declare module '@capacitor/core' {
+  // noinspection JSUnusedGlobalSymbols
+  export interface PluginRegistry {
+    GoogleAuth: GoogleAuthPlugin;
   }
 }
 

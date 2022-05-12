@@ -14,19 +14,19 @@ public class GoogleAuth: CAPPlugin {
     var forceAuthCode: Bool = false;
     var additionalScopes: [String]!;
 
-    
+
     public override func load() {
         googleSignIn = GIDSignIn.sharedInstance;
-        
+
         let serverClientId = getServerClientIdValue();
-        
+
         guard let clientId = getClientIdValue() else {
             NSLog("no client id found in config")
             return;
         }
 
         googleSignInConfiguration = GIDConfiguration.init(clientID: clientId, serverClientID: serverClientId)
-        
+
         // these are scopes granted by default by the signIn method
         let defaultGrantedScopes = ["email", "profile", "openid"];
 
@@ -34,7 +34,7 @@ public class GoogleAuth: CAPPlugin {
         additionalScopes = (getConfigValue("scopes") as? [String] ?? []).filter {
             return !defaultGrantedScopes.contains($0);
         };
-                
+
         if let forceAuthCodeConfig = getConfigValue("forceCodeForRefreshToken") as? Bool {
             forceAuthCode = forceAuthCodeConfig;
         }
@@ -44,7 +44,7 @@ public class GoogleAuth: CAPPlugin {
 
     @objc
     func initialize(_ call: CAPPluginCall) {
-        call.resolve();
+        call.success();
     }
 
     @objc
@@ -54,17 +54,17 @@ public class GoogleAuth: CAPPlugin {
             if self.googleSignIn.hasPreviousSignIn() && !self.forceAuthCode {
                 self.googleSignIn.restorePreviousSignIn() { user, error in
                 if let error = error {
-                    self.signInCall?.reject(error.localizedDescription);
+                    self.signInCall?.error(error.localizedDescription);
                     return;
                 }
                 self.resolveSignInCallWith(user: user!)
                 }
             } else {
                 let presentingVc = self.bridge!.viewController!;
-                
+
                 self.googleSignIn.signIn(with: self.googleSignInConfiguration, presenting: presentingVc) { user, error in
                     if let error = error {
-                        self.signInCall?.reject(error.localizedDescription, "\(error._code)");
+                        self.signInCall?.error(error.localizedDescription, "\(error._code)");
                         return;
                     }
                     if self.additionalScopes.count > 0 {
@@ -72,7 +72,7 @@ public class GoogleAuth: CAPPlugin {
                         // there's no method to include the additional scopes in the initial sign in request
                         self.googleSignIn.addScopes(self.additionalScopes, presenting: presentingVc) { user, error in
                             if let error = error {
-                                self.signInCall?.reject(error.localizedDescription);
+                                self.signInCall?.error(error.localizedDescription);
                                 return;
                             }
                             self.resolveSignInCallWith(user: user!);
@@ -89,12 +89,12 @@ public class GoogleAuth: CAPPlugin {
     func refresh(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
             if self.googleSignIn.currentUser == nil {
-                call.reject("User not logged in.");
+                call.error("User not logged in.");
                 return
             }
             self.googleSignIn.currentUser!.authentication.do { (authentication, error) in
                 guard let authentication = authentication else {
-                    call.reject(error?.localizedDescription ?? "Something went wrong.");
+                    call.error(error?.localizedDescription ?? "Something went wrong.");
                     return;
                 }
                 let authenticationData: [String: Any] = [
@@ -102,7 +102,7 @@ public class GoogleAuth: CAPPlugin {
                     "idToken": authentication.idToken ?? NSNull(),
                     "refreshToken": authentication.refreshToken
                 ]
-                call.resolve(authenticationData);
+                call.success(authenticationData);
             }
         }
     }
@@ -112,7 +112,7 @@ public class GoogleAuth: CAPPlugin {
         DispatchQueue.main.async {
             self.googleSignIn.signOut();
         }
-        call.resolve();
+        call.success();
     }
 
     @objc
@@ -127,8 +127,8 @@ public class GoogleAuth: CAPPlugin {
         }
         googleSignIn.handle(url);
     }
-    
-    
+
+
     func getClientIdValue() -> String? {
         if let clientId = getConfigValue("iosClientId") as? String {
             return clientId;
@@ -143,7 +143,7 @@ public class GoogleAuth: CAPPlugin {
         }
         return nil;
     }
-    
+
     func getServerClientIdValue() -> String? {
         if let serverClientId = getConfigValue("serverClientId") as? String {
             return serverClientId;
@@ -168,6 +168,6 @@ public class GoogleAuth: CAPPlugin {
         if let imageUrl = user.profile?.imageURL(withDimension: 100)?.absoluteString {
             userData["imageUrl"] = imageUrl;
         }
-        signInCall?.resolve(userData);
+        signInCall?.success(userData);
     }
 }

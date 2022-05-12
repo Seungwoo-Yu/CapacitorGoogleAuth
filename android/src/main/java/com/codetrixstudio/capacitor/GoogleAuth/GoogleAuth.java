@@ -37,7 +37,7 @@ import java.net.URL;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-@CapacitorPlugin()
+@NativePlugin()
 public class GoogleAuth extends Plugin {
   private final static String VERIFY_TOKEN_URL = "https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=";
   private final static String FIELD_TOKEN_EXPIRES_IN = "expires_in";
@@ -118,35 +118,35 @@ public class GoogleAuth extends Plugin {
           user.put("id", account.getId());
           user.put("imageUrl", account.getPhotoUrl());
 
-          call.resolve(user);
+          call.success(user);
         } catch (Exception e) {
           e.printStackTrace();
-          call.reject("Something went wrong while retrieving access token", e);
+          call.error("Something went wrong while retrieving access token", e);
         }
       });
     } catch (ApiException e) {
       if (SIGN_IN_CANCELLED == e.getStatusCode()) {
-        call.reject("The user canceled the sign-in flow.", "" + e.getStatusCode());
+        call.error("The user canceled the sign-in flow.", "" + e.getStatusCode());
       } else {
-        call.reject("Something went wrong", "" + e.getStatusCode());
+        call.error("Something went wrong", "" + e.getStatusCode());
       }
     }
   }
 
   @PluginMethod()
   public void refresh(final PluginCall call) {
-    call.reject("I don't know how to refresh token on Android");
+    call.error("I don't know how to refresh token on Android");
   }
 
   @PluginMethod()
   public void signOut(final PluginCall call) {
     googleSignInClient.signOut();
-    call.resolve();
+    call.success();
   }
 
   @PluginMethod()
   public void initialize(final PluginCall call) {
-    call.resolve();
+    call.success();
   }
 
   // Logic to retrieve accessToken, see https://github.com/EddyVerbruggen/cordova-plugin-googleplus/blob/master/src/android/GooglePlus.java

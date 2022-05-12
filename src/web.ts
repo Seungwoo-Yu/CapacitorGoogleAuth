@@ -1,12 +1,15 @@
 import { WebPlugin } from '@capacitor/core';
-import { GoogleAuthPlugin, InitOptions, User } from './definitions';
+import { Authentication, GoogleAuthPlugin, InitOptions, User } from './definitions';
 
 export class GoogleAuthWeb extends WebPlugin implements GoogleAuthPlugin {
   gapiLoaded: Promise<void>;
   options: InitOptions;
 
   constructor() {
-    super();
+    super({
+      name: 'GoogleAuth',
+      platforms: ['web']
+    });
   }
 
   loadScript() {
@@ -63,7 +66,7 @@ export class GoogleAuthWeb extends WebPlugin implements GoogleAuthPlugin {
       this.loadScript();
     });
 
-    this.addUserChangeListener();
+    this.addUserChangeListener().then();
   }
 
   platformJsLoaded() {
@@ -116,7 +119,7 @@ export class GoogleAuthWeb extends WebPlugin implements GoogleAuthPlugin {
       accessToken: authResponse.access_token,
       idToken: authResponse.id_token,
       refreshToken: '',
-    };
+    } as Authentication;
   }
 
   async signOut() {
@@ -151,3 +154,10 @@ export class GoogleAuthWeb extends WebPlugin implements GoogleAuthPlugin {
     return user;
   }
 }
+
+const GoogleAuth = new GoogleAuthWeb();
+
+export { GoogleAuth };
+
+import { registerWebPlugin } from '@capacitor/core';
+registerWebPlugin(GoogleAuth);
