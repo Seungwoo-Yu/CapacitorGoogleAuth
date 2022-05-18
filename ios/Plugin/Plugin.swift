@@ -39,7 +39,7 @@ public class GoogleAuth: CAPPlugin {
             forceAuthCode = forceAuthCodeConfig;
         }
 
-        NotificationCenter.default.addObserver(self, selector: #selector(handleOpenUrl(_ :)), name: Notification.Name(Notification.Name.capacitorOpenURL.rawValue), object: nil);
+        NotificationCenter.default.addObserver(self, selector: #selector(handleOpenUrl(_ :)), name: Notification.Name(CAPNotifications.URLOpen.name()), object: nil);
     }
 
     @objc
@@ -60,11 +60,11 @@ public class GoogleAuth: CAPPlugin {
                 self.resolveSignInCallWith(user: user!)
                 }
             } else {
-                let presentingVc = self.bridge!.viewController!;
+                let presentingVc = self.bridge!.viewController;
 
                 self.googleSignIn.signIn(with: self.googleSignInConfiguration, presenting: presentingVc) { user, error in
                     if let error = error {
-                        self.signInCall?.error(error.localizedDescription, "\(error._code)");
+                        self.signInCall?.error(error.localizedDescription, ("\(error._code)") as! Error);
                         return;
                     }
                     if self.additionalScopes.count > 0 {
