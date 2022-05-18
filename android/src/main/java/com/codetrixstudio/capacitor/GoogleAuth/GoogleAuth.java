@@ -4,18 +4,16 @@ import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.AccountManagerFuture;
 import android.content.Intent;
+import android.content.res.Resources;
 import android.os.Bundle;
 import android.util.Log;
 
-import androidx.activity.result.ActivityResult;
-
 import com.codetrixstudio.capacitor.GoogleAuth.capacitorgoogleauth.R;
 import com.getcapacitor.JSObject;
+import com.getcapacitor.NativePlugin;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
-import com.getcapacitor.annotation.ActivityCallback;
-import com.getcapacitor.annotation.CapacitorPlugin;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.auth.api.signin.GoogleSignInClient;
@@ -24,6 +22,7 @@ import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.Scope;
 import com.google.android.gms.tasks.Task;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -34,11 +33,13 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-@NativePlugin()
+@NativePlugin(requestCodes = GoogleAuth.RC_SIGN_IN)
 public class GoogleAuth extends Plugin {
+  static final int RC_SIGN_IN = 1337;
   private final static String VERIFY_TOKEN_URL = "https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=";
   private final static String FIELD_TOKEN_EXPIRES_IN = "expires_in";
   private final static String FIELD_ACCESS_TOKEN = "accessToken";
@@ -53,11 +54,9 @@ public class GoogleAuth extends Plugin {
 
   @Override
   public void load() {
-    String clientId = getConfig().getString("androidClientId",
-      getConfig().getString("clientId",
-        this.getContext().getString(R.string.server_client_id)));
+    String clientId = getClientId();
 
-    boolean forceCodeForRefreshToken = getConfig().getBoolean("forceCodeForRefreshToken", false);
+    boolean forceCodeForRefreshToken = getForceCodeForRefreshToken();
 
     GoogleSignInOptions.Builder googleSignInBuilder = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestIdToken(clientId)
@@ -67,7 +66,7 @@ public class GoogleAuth extends Plugin {
       googleSignInBuilder.requestServerAuthCode(clientId, true);
     }
 
-    String[] scopeArray = getConfig().getArray("scopes", new String[] {});
+    String[] scopeArray = getScopes();
     Scope[] scopes = new Scope[scopeArray.length - 1];
     Scope firstScope = new Scope(scopeArray[0]);
     for (int i = 1; i < scopeArray.length; i++) {
@@ -81,55 +80,68 @@ public class GoogleAuth extends Plugin {
 
   @PluginMethod()
   public void signIn(PluginCall call) {
+    saveCall(call);
     Intent signInIntent = googleSignInClient.getSignInIntent();
-    startActivityForResult(call, signInIntent, "signInResult");
+    startActivityForResult(call, signInIntent, RC_SIGN_IN);
   }
 
-  @ActivityCallback
-  protected void signInResult(PluginCall call, ActivityResult result) {
-    if (call == null) return;
+  @Override
+  protected void handleOnActivityResult(int requestCode, int resultCode, Intent data) {
+    super.handleOnActivityResult(requestCode, resultCode, data);
 
-    Task<GoogleSignInAccount> completedTask = GoogleSignIn.getSignedInAccountFromIntent(result.getData());
+    PluginCall signInCall = getSavedCall();
 
-    try {
-      GoogleSignInAccount account = completedTask.getResult(ApiException.class);
+    if (signInCall == null) return;
 
-      // The accessToken is retrieved by executing a network request against the Google API, so it needs to run in a thread
-      ExecutorService executor = Executors.newSingleThreadExecutor();
-      executor.execute(() -> {
-        try {
-          JSONObject accessTokenObject = getAuthToken(account.getAccount(), true);
+    if (requestCode == RC_SIGN_IN) {
+      Task<GoogleSignInAccount> completedTask = GoogleSignIn.getSignedInAccountFromIntent(data);
 
-          JSObject authentication = new JSObject();
-          authentication.put("idToken", account.getIdToken());
-          authentication.put(FIELD_ACCESS_TOKEN, accessTokenObject.get(FIELD_ACCESS_TOKEN));
-          authentication.put(FIELD_TOKEN_EXPIRES, accessTokenObject.get(FIELD_TOKEN_EXPIRES));
-          authentication.put(FIELD_TOKEN_EXPIRES_IN, accessTokenObject.get(FIELD_TOKEN_EXPIRES_IN));
+      try {
+            GoogleSignInAccount account = completedTask.getResult(ApiException.class);
 
-          JSObject user = new JSObject();
-          user.put("serverAuthCode", account.getServerAuthCode());
-          user.put("idToken", account.getIdToken());
-          user.put("authentication", authentication);
+            // The accessToken is retrieved by executing a network request against the Google API, so it needs to run in a thread
+            ExecutorService executor = Executors.newSingleThreadExecutor();
+            executor.execute(() -> {
+              try {
+                JSONObject accessTokenObject = getAuthToken(Objects.requireNonNull(account).getAccount(), true);
 
-          user.put("displayName", account.getDisplayName());
-          user.put("email", account.getEmail());
-          user.put("familyName", account.getFamilyName());
-          user.put("givenName", account.getGivenName());
-          user.put("id", account.getId());
-          user.put("imageUrl", account.getPhotoUrl());
+                JSObject authentication = new JSObject();
+                authentication.put("idToken", account.getIdToken());
+                authentication.put(FIELD_ACCESS_TOKEN, accessTokenObject.get(FIELD_ACCESS_TOKEN));
+                authentication.put(FIELD_TOKEN_EXPIRES, accessTokenObject.get(FIELD_TOKEN_EXPIRES));
+                authentication.put(FIELD_TOKEN_EXPIRES_IN, accessTokenObject.get(FIELD_TOKEN_EXPIRES_IN));
 
-          call.success(user);
-        } catch (Exception e) {
-          e.printStackTrace();
-          call.error("Something went wrong while retrieving access token", e);
-        }
-      });
-    } catch (ApiException e) {
-      if (SIGN_IN_CANCELLED == e.getStatusCode()) {
-        call.error("The user canceled the sign-in flow.", "" + e.getStatusCode());
-      } else {
-        call.error("Something went wrong", "" + e.getStatusCode());
-      }
+                JSObject user = new JSObject();
+                user.put("serverAuthCode", account.getServerAuthCode());
+                user.put("idToken", account.getIdToken());
+                user.put("authentication", authentication);
+
+                user.put("displayName", account.getDisplayName());
+                user.put("email", account.getEmail());
+                user.put("familyName", account.getFamilyName());
+                user.put("givenName", account.getGivenName());
+                user.put("id", account.getId());
+                user.put("imageUrl", account.getPhotoUrl());
+
+                signInCall.success(user);
+              } catch (Exception e) {
+                e.printStackTrace();
+                signInCall.error("Something went wrong while retrieving access token", e);
+              }
+            });
+          } catch (ApiException e) {
+            if (SIGN_IN_CANCELLED == e.getStatusCode()) {
+              signInCall.error(
+                      "The user canceled the sign-in flow.",
+                      new Exception("" + e.getStatusCode())
+              );
+            } else {
+              signInCall.error(
+                      "Something went wrong",
+                      new Exception("" + e.getStatusCode())
+              );
+            }
+          }
     }
   }
 
@@ -165,6 +177,43 @@ public class GoogleAuth extends Plugin {
         throw e;
       }
     }
+  }
+
+  private String getClientId() throws Resources.NotFoundException {
+    Object androidClientId = getConfigValue("androidClientId");
+    if (androidClientId != null) {
+      return (String) androidClientId;
+    }
+
+    Object clientId = getConfigValue("clientId");
+    if (clientId != null) {
+      return (String) clientId;
+    }
+
+    return this.getContext().getString(R.string.server_client_id);
+  }
+
+  private Boolean getForceCodeForRefreshToken() {
+    Object forceCodeForRefreshToken = getConfigValue("forceCodeForRefreshToken");
+    if (forceCodeForRefreshToken != null) {
+      return (Boolean) forceCodeForRefreshToken;
+    }
+
+    return false;
+  }
+
+  private String[] getScopes() {
+    JSONArray scopes = (JSONArray) getConfigValue("scopes");
+    if (scopes != null) {
+      String[] array = new String[scopes.length()];
+      for(int i = 0; i < array.length; i++) {
+        array[i] = scopes.optString(i);
+      }
+
+      return array;
+    }
+
+    return new String[] {};
   }
 
   private JSONObject verifyToken(String authToken) throws IOException, JSONException {
