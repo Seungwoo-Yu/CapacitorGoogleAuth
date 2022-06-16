@@ -62,8 +62,10 @@ export class GoogleAuthWeb extends WebPlugin {
     }
     platformJsLoaded() {
         gapi.load('auth2', () => {
+            // https://github.com/CodetrixStudio/CapacitorGoogleAuth/issues/202#issuecomment-1147393785
             const clientConfig = {
                 client_id: this.options.clientId,
+                plugin_name: 'CodetrixStudioCapacitorGoogleAuth',
             };
             if (this.options.scopes.length) {
                 clientConfig.scope = this.options.scopes.join(' ');
