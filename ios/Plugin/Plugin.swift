@@ -64,7 +64,7 @@ public class GoogleAuth: CAPPlugin {
 
                 self.googleSignIn.signIn(with: self.googleSignInConfiguration, presenting: presentingVc) { user, error in
                     if let error = error {
-                        self.signInCall?.error(error.localizedDescription, ("\(error._code)") as! Error);
+                        self.signInCall?.error(error.localizedDescription, error);
                         return;
                     }
                     if self.additionalScopes.count > 0 {
